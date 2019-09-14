@@ -17,29 +17,23 @@
  * time 
 
  ## Install
- ```
+ ```diff
  $ git clone https://github.com/khairulislam/Gerrit-Miner
  $ cd Gerrit-Miner
  $ pip install -r requirements.txt
 ```
-
  ## Getting started
  Run the main.py file to start mining. 
  ```
-$ main.py
+$ python main.py
 ```
  Modify miner arguments accordingly. To add more gerrit sites please modify Gerrit.py file.
  
- Feedback
---------
-
+## Feedback
 Please open an issue to request a feature or submit a bug report. Or even if
-you just want to provide some feedback, I'd love to hear. I'm also available on
-Gmail at [@khairul](khairulislamtanim@gmail.com).
+you just want to provide some feedback, I'd love to hear. I'm available at khairulislamtanim@gmail.com.
 
-Contributing
-------------
-
+## Contributing
 1.  Fork it.
 2.  Create your feature branch (`git checkout -b my-new-feature`).
 3.  Commit your changes (`git commit -am 'Added some feature'`).
