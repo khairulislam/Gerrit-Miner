@@ -8,51 +8,68 @@ from concurrent.futures import as_completed, ProcessPoolExecutor, ThreadPoolExec
 
 
 class Miner:
-    def __init__(self, gerrit: Gerrit, fields: [Field], status: Status, start_index: int, end_index: int,
-                 batch_size: int = 100, replace: bool = False):
+    start_index = 0
+    # some sites like android have upper limit to end index too
+    end_index = -1
+    # some site like eclipse sets  highest batch download limit to 100
+    # other sites may allow upto 500
+    batch_size = 100
+
+    # must be like this format: 2016-01-01 00:00:00.000000000
+    after = ''
+    before = ''
+
+    has_more_changes = True
+
+    def __init__(self, gerrit: Gerrit, fields: [Field], status: Status, replace: bool = False):
         if type(gerrit) != Gerrit:
             print("Error: please pass a Gerrit type arg. Exiting ..")
             exit(-1)
         self.gerrit = gerrit
         self.fields = fields
         self.status = status
-        self.start_index = start_index
-        self.end_index = end_index
-        self.batch_size = batch_size
         self.replace = replace
 
         self.root = f"{gerrit}"
         if not os.path.isdir(self.root):
             os.mkdir(self.root)
 
-    def create_url(self, current_index):
+    def create_url(self, start_index):
         url = f"{self.gerrit.value}/changes/?"
         # add query
-        url += f"q=status:{self.status}&"
+        url += f"q=status:{self.status}"
 
-        # The S or start query parameter can be supplied to skip a number of changes from the list
-        if current_index < 0:
-            print("Error: start index can't be negative. Resetting to 0.")
-            start_index = 0
-        url += f"S={current_index}&"
-
-        # used to limit the returned results.
-        if self.batch_size <= 0:
-            print("Error: change count can't be 0. Resetting to 100.")
-            count = 100
-        url += f"n={self.batch_size}&"
+        if self.after != '':
+            url += f"+after:\"{self.after}\""
+        if self.before != '':
+            url += f"+before:\"{self.before}\""
 
         # optional fields
         for field in self.fields:
             if type(field) is Field:
-                url += f"o={field}&"
+                url += f"&o={field}"
             else:
                 print(f"Error: unknown field {field}")
+
+        # The S or start query parameter can be supplied to skip a number of changes from the list
+        if start_index < 0:
+            print("Error: start index can't be negative. Resetting to 0.")
+            start_index = 0
+        url += f"&S={start_index}"
+
+        # used to limit the returned results.
+        if self.batch_size <= 0:
+            print("Error: change count can't be 0. Resetting to 100.")
+            self.batch_size = 100
+
+        if self.end_index != -1:
+            url += f"&n={min(self.batch_size, self.end_index-start_index)}"
+        else:
+            url += f"&n={self.batch_size}"
+
         # an exceptional case
         url = url.replace("NO_LIMIT", "NO-LIMIT")
 
-        if url[-1] == '&':
-            url = url[:-1]
         return url
 
     def create_filename(self, current_index):
@@ -62,7 +79,12 @@ class Miner:
         data = requests.get(url, timeout=timeout).text[4:]
         if len(data) == 0:
             print(f"Error: {url} response is empty")
+            self.has_more_changes = False
             return False
+
+        if "\"_more_changes\": true" not in data:
+            print("No more changes left")
+            self.has_more_changes = False
 
         data = Miner.parse(data)
         if data is None:
@@ -84,14 +106,20 @@ class Miner:
             start = time.time()
 
             future_to_url = {}
-            for index in range(self.start_index, self.end_index, self.batch_size):
-                url = self.create_url(index)
-                filename = self.create_filename(index)
+            current_index = self.start_index
+            while self.has_more_changes and (self.end_index == -1 or current_index < self.end_index):
+                url = self.create_url(current_index)
+                filename = self.create_filename(current_index)
+
                 if not self.replace and os.path.exists(f"{self.root}/{filename}"):
+                    print(f"{filename} already exists")
+                    current_index += self.batch_size
                     continue
 
                 future = executor.submit(self.download, url, timeout, filename)
                 future_to_url[future] = url
+
+                current_index += self.batch_size
 
             results = []
             for future in as_completed(future_to_url):
