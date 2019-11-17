@@ -8,6 +8,9 @@ from concurrent.futures import as_completed, ProcessPoolExecutor, ThreadPoolExec
 
 
 class Miner:
+    status = ''
+    fields = []
+
     start_index = 0
     # some sites like android have upper limit to end index too
     end_index = -1
@@ -21,23 +24,31 @@ class Miner:
 
     has_more_changes = True
 
-    def __init__(self, gerrit: Gerrit, fields: [Field], status: Status, replace: bool = False):
+    def __init__(self, gerrit: Gerrit, replace: bool = False):
         if type(gerrit) != Gerrit:
             print("Error: please pass a Gerrit type arg. Exiting ..")
             exit(-1)
         self.gerrit = gerrit
-        self.fields = fields
-        self.status = status
         self.replace = replace
 
         self.root = f"{gerrit}"
+        self.profile_root = os.path.join(self.root, "profile")
+
         if not os.path.isdir(self.root):
             os.mkdir(self.root)
+        if not os.path.isdir(self.profile_root):
+            os.mkdir(self.profile_root)
+        print(self.profile_root)
 
-    def create_url(self, start_index):
-        url = f"{self.gerrit.value}/changes/?"
+    def create_change_url(self, start_index):
+        url = f"{self.gerrit.value}/changes"
         # add query
-        url += f"q=status:{self.status}"
+        # Clients are allowed to specify more than one query by setting the q parameter multiple times.
+        # In that case the result is an array of arrays, one per query in the same order the queries were given in.
+        # however here we have written code for one query only
+        url += "/?q="
+        if self.status != '':
+            url += f"status:{self.status}"
 
         if self.after != '':
             url += f"+after:\"{self.after}\""
@@ -68,11 +79,11 @@ class Miner:
             url += f"&n={self.batch_size}"
 
         # an exceptional case
-        url = url.replace("NO_LIMIT", "NO-LIMIT")
+        url = url.replace("NO_LIMIT", "NO-LIMIT").replace('=+', '=')
 
         return url
 
-    def create_filename(self, current_index):
+    def create_change_filename(self, current_index):
         return f"{self.gerrit}_{self.status}_{current_index}_{current_index + self.batch_size}.json"
 
     def download(self, url: str, timeout: int, filename: str):
@@ -83,7 +94,7 @@ class Miner:
             return False
 
         if "\"_more_changes\": true" not in data:
-            print("No more changes left")
+            # print("No more changes left")
             self.has_more_changes = False
 
         data = Miner.parse(data)
@@ -91,14 +102,13 @@ class Miner:
             print(f"Error: {url} response could not be parsed")
             return False
         else:
-            path = f"{self.root}/{filename}"
-            self.dump(path=path, data=data)
+            self.dump(path=filename, data=data)
             return True
 
-    def mine(self, n_jobs: int = 1, timeout: int = 30):
+    def change_mine(self, n_jobs: int = 1, timeout: int = 30):
         urls = []
         for index in range(self.start_index, self.end_index, self.batch_size):
-            url = self.create_url(index)
+            url = self.create_change_url(index)
             urls.append(url)
 
         # with ProcessPoolExecutor(max_workers=n_jobs) as executor:
@@ -108,15 +118,16 @@ class Miner:
             future_to_url = {}
             current_index = self.start_index
             while self.has_more_changes and (self.end_index == -1 or current_index < self.end_index):
-                url = self.create_url(current_index)
-                filename = self.create_filename(current_index)
+                url = self.create_change_url(current_index)
+                filename = self.create_change_filename(current_index)
 
-                if not self.replace and os.path.exists(f"{self.root}/{filename}"):
+                path = os.path.join(self.root, filename)
+                if not self.replace and os.path.exists(path):
                     print(f"{filename} already exists")
                     current_index += self.batch_size
                     continue
 
-                future = executor.submit(self.download, url, timeout, filename)
+                future = executor.submit(self.download, url, timeout, path)
                 future_to_url[future] = url
 
                 current_index += self.batch_size
@@ -157,3 +168,21 @@ class Miner:
                 print(e)
                 return False
         return True
+
+    def profile_mine(self, account_id, timeout=60):
+        join_file_path = os.path.join(self.profile_root, f"{account_id}_joindate.json")
+        details_file_path = os.path.join(self.profile_root, f"{account_id}_details.json")
+        print(join_file_path, )
+
+        # download join date 
+        if self.replace or not os.path.exists(join_file_path):
+            url = f"{self.gerrit.value}/accounts/{account_id}/detail"
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self.download, url, timeout, join_file_path)
+        
+        # download all changes associated with this account
+        if self.replace or not os.path.exists(details_file_path):
+            url = f"{self.gerrit.value}/changes/?q=is:closed+owner:{account_id}"
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self.download, url, timeout, details_file_path)
