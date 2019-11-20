@@ -2,6 +2,15 @@
  Mines gerrit changes with detailed info. This miner follows the rest api documentation in
  [rest-api](https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html) to mine changes.
 
+## Features:
+Can be used to mine:
+* Code changes with revisions, messages, labels and many other fields in details
+* Apply queries to filter our changes by a range of date and status 
+(open, closed etc)
+* Developer profiles (registration date and other personal details)
+* Respective work of each developer
+* Comments or discussions
+
  ## Speciality
  * This miner creates concurrent threads to make several web requests at a time. This makes mining several 
  times faster than normal.The user is free to use concurrent process also, 
