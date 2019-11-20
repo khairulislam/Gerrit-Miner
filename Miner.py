@@ -31,14 +31,12 @@ class Miner:
         self.gerrit = gerrit
         self.replace = replace
 
-        self.root = f"{gerrit}"
-        self.profile_root = os.path.join(self.root, "profile")
+        self._root = f"{gerrit}"
 
-        if not os.path.isdir(self.root):
-            os.mkdir(self.root)
-        if not os.path.isdir(self.profile_root):
-            os.mkdir(self.profile_root)
-        print(self.profile_root)
+    def set_data_root(self, root):
+        self._root = root
+        if not os.path.isdir(self._root):
+            os.mkdir(self._root)
 
     def create_change_url(self, start_index):
         url = f"{self.gerrit.value}/changes"
@@ -121,7 +119,7 @@ class Miner:
                 url = self.create_change_url(current_index)
                 filename = self.create_change_filename(current_index)
 
-                path = os.path.join(self.root, filename)
+                path = os.path.join(self._root, filename)
                 if not self.replace and os.path.exists(path):
                     print(f"{filename} already exists")
                     current_index += self.batch_size
@@ -170,8 +168,8 @@ class Miner:
         return True
 
     def profile_mine(self, account_id, timeout=60):
-        join_file_path = os.path.join(self.profile_root, f"{account_id}_joindate.json")
-        details_file_path = os.path.join(self.profile_root, f"{account_id}_details.json")
+        join_file_path = os.path.join(self._root, f"{account_id}_joindate.json")
+        details_file_path = os.path.join(self._root, f"{account_id}_details.json")
         print(join_file_path, )
 
         # download join date 
@@ -186,3 +184,10 @@ class Miner:
 
             with ThreadPoolExecutor(max_workers=1) as executor:
                 executor.submit(self.download, url, timeout, details_file_path)
+
+    def comment_mine(self, change_number, timeout=30):
+        file_path = os.path.join(self._root, f"comment_{change_number}.json")
+        if self.replace or not os.path.exists(file_path):
+            url = f"{self.gerrit.value}/changes/{change_number}/comments"
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self.download, url, timeout, file_path)

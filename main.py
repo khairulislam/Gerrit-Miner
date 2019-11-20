@@ -1,9 +1,8 @@
 from Miner import *
 
 
-def change_mine(miner: Miner, fields, status=Status.closed, start=0, end=100, batch=100):
+def change_mine(miner: Miner, status=Status.closed, start=0, end=100, batch=100):
     fields = [Field.all_revisions, Field.all_files, Field.messages, Field.detailed_labels]
-    miner = Miner(gerrit=Gerrit.eclipse, replace=False)
 
     miner.fields = fields
     miner.status = status
@@ -28,8 +27,14 @@ def change_mine(miner: Miner, fields, status=Status.closed, start=0, end=100, ba
 
 if __name__ == "__main__":
     miner = Miner(gerrit=Gerrit.eclipse, replace=False)
+
+    # miner.set_data_root('change')
     # fields = [Field.all_revisions, Field.all_files, Field.messages, Field.detailed_labels]
     # change_mine(miner, fields, Status.closed, start=0, end=2000)
 
-    miner.profile_mine(973)
+    # miner.set_data_root('profile')
+    # miner.profile_mine(973)
+
+    # miner.set_data_root('comment')
+    # miner.comment_mine(1235)
 
