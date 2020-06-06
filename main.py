@@ -15,20 +15,20 @@ def load_profiles(miner: Miner, sub_directory: str = "profile"):
 
 
 if __name__ == "__main__":
+    # 1. Download change details
     miner = Miner(gerrit=Gerrit.libreoffice, replace=False)
 
-    fields = [Field.all_revisions, Field.all_files, Field.messages, Field.detailed_labels]
-    miner.fields = fields
-    miner.status = Status.closed
-    miner.end_index = -1
-    miner.batch_size = 500  # or 100
+    parameters = Parameters(status=Status.closed, start_index=0, end_index=-1,
+                            after='2012-01-01 00:00:00.000000000',
+                            before='2013-01-01 00:00:00.000000000',
+                            fields=[Field.all_revisions, Field.all_files, Field.messages, Field.detailed_labels],
+                            n_jobs=4, batch_size=100)
 
     index = 0
     max_retry = 3
     while miner.has_more_changes and max_retry > 0:
         miner.start_index = index
-        result = miner.change_mine(n_jobs=4, timeout=600, after='2012-01-01 00:00:00.000000000',
-                                   before='2013-01-01 00:00:00.000000000')
+        result = miner.change_details_mine(parameters=parameters)
         for url, did_succeed in result:
             if did_succeed is False:
                 print(f"{url} failed .")
